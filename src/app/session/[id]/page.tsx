@@ -88,6 +88,77 @@ function useAudioQueue() {
   return { enqueue, stopAll, currentGeneration };
 }
 
+// Символов в секунду для эффекта "печатает как человек" — токены от LLM
+// прилетают неравномерно (иногда пачками), поэтому реальный текст копится
+// в буфере, а на экран выводится с постоянной скоростью, примерно
+// соответствующей темпу устной речи, а не скорости сети/генерации.
+const TYPING_CHARS_PER_SEC = 18;
+
+// Буферизует сырые дельты текста и "допечатывает" их с фиксированной
+// скоростью, независимо от того, как быстро/неравномерно они приходят.
+function useTypewriter(onChange: (text: string) => void) {
+  const targetRef = useRef("");
+  const shownRef = useRef("");
+  const rafRef = useRef<number | null>(null);
+  const lastTickRef = useRef(0);
+
+  const tick = useCallback(
+    (now: number) => {
+      const elapsedSec = lastTickRef.current ? (now - lastTickRef.current) / 1000 : 0;
+      lastTickRef.current = now;
+
+      const target = targetRef.current;
+      if (shownRef.current.length < target.length) {
+        const grow = Math.max(1, Math.round(TYPING_CHARS_PER_SEC * elapsedSec));
+        shownRef.current = target.slice(0, Math.min(target.length, shownRef.current.length + grow));
+        onChange(shownRef.current);
+      }
+
+      if (shownRef.current.length < targetRef.current.length) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+      }
+    },
+    [onChange],
+  );
+
+  const ensureRunning = useCallback(() => {
+    if (rafRef.current == null) {
+      lastTickRef.current = 0;
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  }, [tick]);
+
+  const setTarget = useCallback(
+    (text: string) => {
+      targetRef.current = text;
+      ensureRunning();
+    },
+    [ensureRunning],
+  );
+
+  const reset = useCallback(() => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    targetRef.current = "";
+    shownRef.current = "";
+  }, []);
+
+  // Мгновенно показывает весь текст целиком (например, при обрыве ответа,
+  // где допечатывать по одному символу уже не имеет смысла).
+  const flush = useCallback(() => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    shownRef.current = targetRef.current;
+    onChange(shownRef.current);
+  }, [onChange]);
+
+  useEffect(() => reset, [reset]);
+
+  return { setTarget, reset, flush };
+}
+
 function SessionContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -111,6 +182,7 @@ function SessionContent() {
   const abortRef = useRef<AbortController | null>(null);
 
   const audioQueue = useAudioQueue();
+  const typewriter = useTypewriter(setStreamingText);
   const { state: micState, interimText, start: startListening, stop: stopListening } = useSpeechRecognition();
 
   const scenario = scenarioSlug ? getScenarioBySlug(scenarioSlug) : null;
@@ -162,8 +234,9 @@ function SessionContent() {
   const interrupt = useCallback(() => {
     abortRef.current?.abort();
     audioQueue.stopAll();
+    typewriter.reset();
     if (flowRef.current === "speaking" || flowRef.current === "thinking") setFlow("idle");
-  }, [audioQueue]);
+  }, [audioQueue, typewriter]);
 
   const speakOne = useCallback(
     async (text: string) => {
@@ -204,6 +277,7 @@ function SessionContent() {
       interrupt();
       setError(null);
       setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+      typewriter.reset();
       setStreamingText("");
       setFlow("thinking");
 
@@ -245,11 +319,17 @@ function SessionContent() {
                 setFlow("speaking");
               }
               full += payload.text;
-              setStreamingText(full);
+              typewriter.setTarget(full);
             } else if (payload.type === "audio") {
               if (generation !== audioQueue.currentGeneration()) continue;
               const bytes = Uint8Array.from(atob(payload.audio), (c) => c.charCodeAt(0));
               audioQueue.enqueue(new Blob([bytes], { type: "audio/mpeg" }));
+            } else if (payload.type === "restart") {
+              // Сервер перезапустил генерацию с нуля после обрыва соединения
+              // с LLM — отброшенный обрывок текста не должен остаться в UI.
+              full = "";
+              typewriter.reset();
+              setStreamingText("");
             } else if (payload.type === "error") {
               throw new Error("chat_failed");
             }
@@ -257,6 +337,9 @@ function SessionContent() {
         }
 
         if (generation === audioQueue.currentGeneration()) {
+          // Ответ уже весь получен и сохранён — дальше "допечатывать" его
+          // по буквам смысла нет, поэтому сразу показываем целиком.
+          typewriter.flush();
           setMessages((prev) => [...prev, { role: "opponent", content: full.trim() }]);
           setStreamingText(null);
           if (flowRef.current === "speaking") setFlow("idle");
@@ -264,11 +347,12 @@ function SessionContent() {
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
         setError("Не удалось получить ответ. Проверь соединение и попробуй ещё раз.");
+        typewriter.reset();
         setStreamingText(null);
         setFlow("idle");
       }
     },
-    [params.id, interrupt, audioQueue],
+    [params.id, interrupt, audioQueue, typewriter],
   );
 
   function handleMicToggle() {

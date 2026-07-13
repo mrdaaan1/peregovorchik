@@ -132,10 +132,13 @@ export async function POST(request: Request) {
         }
       }
 
-      // OpenRouter иногда обрывает SSE-соединение среди ответа (нестабильность
-      // бесплатной модели/сети) — один retry с нуля, если не успели получить
-      // ни одного токена, иначе отдаём клиенту то, что уже накопили, вместо
-      // полного провала на середине фразы.
+      // OpenRouter (особенно бесплатные модели) регулярно обрывает SSE-
+      // соединение среди ответа — до нескольких раз за сессию. Каждая
+      // попытка стартует с чистого листа (частичная фраза пользователю не
+      // нужна), уже отправленные клиенту дельты не отзываются — они просто
+      // заменяются полным финальным текстом при "done".
+      const MAX_ATTEMPTS = 3;
+
       async function runOnce() {
         for await (const delta of streamOpenRouter(NEGOTIATION_MODEL, chatMessages)) {
           if (state.closed) break;
@@ -146,12 +149,17 @@ export async function POST(request: Request) {
       }
 
       try {
-        try {
-          await runOnce();
-        } catch (e) {
-          if (full) throw e;
-          console.warn("negotiation stream dropped with no output, retrying once", e);
-          await runOnce();
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          try {
+            await runOnce();
+            break;
+          } catch (e) {
+            if (attempt === MAX_ATTEMPTS) throw e;
+            console.warn(`negotiation stream dropped (attempt ${attempt}/${MAX_ATTEMPTS}), retrying`, e);
+            full = "";
+            unspokenStart = 0;
+            safeEnqueue(jsonLine({ type: "restart" }));
+          }
         }
 
         await speakReady(full.length, true);
