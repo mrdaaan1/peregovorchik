@@ -59,6 +59,13 @@ function ScenarioBriefingContent() {
         </div>
       </div>
 
+      {scenario.contentWarning && (
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/30 p-5">
+          <p className="font-semibold mb-1 text-red-600">⚠️ Предупреждение</p>
+          <p className="text-sm leading-relaxed">{scenario.contentWarning}</p>
+        </div>
+      )}
+
       <div className="rounded-2xl bg-card border border-card-border p-5">
         <p className="font-semibold mb-2">Твоя роль и ситуация</p>
         <p className="text-sm leading-relaxed whitespace-pre-line">{scenario.briefingText}</p>

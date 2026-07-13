@@ -15,6 +15,18 @@ function jsonLine(obj: unknown): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
+// Модель иногда всё же вставляет ремарки вида "*пожимает плечами*" несмотря
+// на запрет в промпте — это не должно ни озвучиваться, ни попадать в текст,
+// который слышит/видит пользователь в устном диалоге.
+function stripActionRemarks(text: string): string {
+  return text
+    .replace(/\*[^*]*\*/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -118,7 +130,7 @@ export async function POST(request: Request) {
         const cut = force ? pending.length : matches.length ? matches[matches.length - 1].index! : -1;
         if (cut < 0) return;
 
-        const sentence = pending.slice(0, cut).trim();
+        const sentence = stripActionRemarks(pending.slice(0, cut));
         unspokenStart += cut;
         if (!sentence) return;
 
@@ -139,8 +151,10 @@ export async function POST(request: Request) {
       // заменяются полным финальным текстом при "done".
       const MAX_ATTEMPTS = 3;
 
+      const model = scenario.model ?? NEGOTIATION_MODEL;
+
       async function runOnce() {
-        for await (const delta of streamOpenRouter(NEGOTIATION_MODEL, chatMessages)) {
+        for await (const delta of streamOpenRouter(model, chatMessages)) {
           if (state.closed) break;
           full += delta;
           safeEnqueue(jsonLine({ type: "delta", text: delta }));
@@ -164,7 +178,7 @@ export async function POST(request: Request) {
 
         await speakReady(full.length, true);
 
-        const reply = full.trim();
+        const reply = stripActionRemarks(full);
         if (reply) {
           await supabase.from("messages").insert({ session_id: session.id, role: "opponent", content: reply });
         }

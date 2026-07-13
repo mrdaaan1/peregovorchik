@@ -40,8 +40,14 @@ export type Scenario = {
   playerRole: string;
   opponentRole: string;
   opponentName: string;
-  opponentAvatarKey: "boss" | "supplier" | "client";
+  opponentAvatarKey: "boss" | "supplier" | "client" | "tough";
   briefingText: string; // видимая игроку часть — контекст, его цель, что известно
   opponent: OpponentConfig;
   evaluationCriteria: EvaluationCriterion[];
+  /** Модель OpenRouter для диалога в этом сценарии — переопределяет глобальную модель по умолчанию. */
+  model?: string;
+  /** Разрешает оппоненту грубую лексику и мат в системном промпте (по умолчанию запрещено). */
+  allowProfanity?: boolean;
+  /** Предупреждение о контенте, показываемое перед стартом (например, ненормативная лексика). */
+  contentWarning?: string;
 };

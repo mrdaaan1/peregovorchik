@@ -1,12 +1,13 @@
 "use client";
 
 export type OpponentState = "idle" | "listening" | "thinking" | "talking";
-export type OpponentAvatarKey = "boss" | "supplier" | "client";
+export type OpponentAvatarKey = "boss" | "supplier" | "client" | "tough";
 
 const AVATAR_STYLE: Record<OpponentAvatarKey, { skin: string; hair: string; outfit: string; accessory: string }> = {
   boss: { skin: "#e0ac85", hair: "#3a3a3a", outfit: "#2a4f6f", accessory: "#c9a13b" }, // тёмный пиджак, галстук
   supplier: { skin: "#f0c9a0", hair: "#6b3e26", outfit: "#5a3d5c", accessory: "#e8749a" }, // деловой блейзер, брошь
   client: { skin: "#d9a876", hair: "#222222", outfit: "#8a2f2f", accessory: "#e0e0e0" }, // раздражённый клиент, красный оттенок
+  tough: { skin: "#c98f6a", hair: "#111111", outfit: "#1a1a1a", accessory: "#b3202c" }, // жёсткий переговорщик, чёрный костюм
 };
 
 export function OpponentAvatar({
