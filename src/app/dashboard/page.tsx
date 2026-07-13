@@ -104,8 +104,8 @@ function DashboardContent() {
   const recommended = history && history.length > 0 ? nextRecommendedScenario(history) : SCENARIOS[0];
 
   return (
-    <main className="flex-1 flex flex-col px-4 py-8 gap-6 max-w-2xl mx-auto w-full">
-      <div className="flex items-center justify-between">
+    <main className="flex-1 px-4 py-8 max-w-6xl mx-auto w-full">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-extrabold">🤝 Арена переговоров</h1>
           <p className="text-muted text-sm mt-1">{profile?.display_name ?? profile?.email}</p>
@@ -115,100 +115,103 @@ function DashboardContent() {
         </button>
       </div>
 
-      {history && history.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 animate-fade-in-up">
-          <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-4 text-center shadow-lg shadow-accent/20">
-            <p className="font-display text-2xl font-extrabold tabular-nums">{sessionsCompleted}</p>
-            <p className="text-xs text-white/80 mt-0.5">тренировок</p>
-          </div>
-          <div className="card-elevated rounded-2xl p-4 text-center">
-            <p className="font-display text-2xl font-extrabold tabular-nums">{avgScore}</p>
-            <p className="text-muted text-xs mt-0.5">средний балл</p>
-          </div>
-          <div className="card-elevated rounded-2xl p-4 text-center">
-            <p className="font-display text-2xl font-extrabold tabular-nums">
-              {wins}
-              <span className="text-base">🏆</span>
-            </p>
-            <p className="text-muted text-xs mt-0.5">побед</p>
-          </div>
-        </div>
-      )}
-
-      {history && (
-        <Link
-          href={`/scenarios/${recommended.slug}`}
-          className="card-elevated card-elevated-interactive rounded-2xl bg-gradient-to-br from-gold/15 to-transparent p-5 flex items-center gap-4 animate-fade-in-up"
-          style={{ borderColor: "color-mix(in srgb, var(--gold) 35%, var(--card-border))" }}
-        >
-          <span className="text-3xl">🗺️</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs uppercase tracking-wide text-gold-dark font-semibold">
-              {history.length === 0 ? "С чего начать" : "Следующий шаг"}
-            </p>
-            <p className="font-semibold mt-0.5">{recommended.title}</p>
-            <p className="text-muted text-sm mt-0.5">{recommended.shortDescription}</p>
-          </div>
-          <span className="text-2xl text-muted">→</span>
-        </Link>
-      )}
-
-      <div className="flex gap-3">
-        <Link
-          href="/theory"
-          className="card-elevated card-elevated-interactive flex-1 rounded-2xl p-4 flex items-center gap-3"
-        >
-          <span className="text-2xl">🎓</span>
-          <span className="font-medium text-sm">Теория переговоров</span>
-        </Link>
-      </div>
-
-      <div>
-        <p className="font-semibold mb-3">Сценарии</p>
-        <div className="flex flex-col gap-4">
-          {SCENARIOS.map((scenario, i) => (
+      <div className="grid lg:grid-cols-[1fr_20rem] gap-6 items-start">
+        <div className="flex flex-col gap-6 min-w-0">
+          {history && (
             <Link
-              key={scenario.slug}
-              href={`/scenarios/${scenario.slug}`}
-              className="card-elevated card-elevated-interactive animate-fade-in-up rounded-2xl p-5 flex items-center gap-4"
-              style={{ animationDelay: `${i * 40}ms` }}
+              href={`/scenarios/${recommended.slug}`}
+              className="card-elevated card-elevated-interactive rounded-2xl bg-gradient-to-br from-gold/15 to-transparent p-5 flex items-center gap-4 animate-fade-in-up"
+              style={{ borderColor: "color-mix(in srgb, var(--gold) 35%, var(--card-border))" }}
             >
-              <OpponentAvatar avatarKey={scenario.opponentAvatarKey} size={64} />
+              <span className="text-3xl">🗺️</span>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-lg">{scenario.title}</p>
-                  <span className={`text-xs font-medium ${DIFFICULTY_LABELS[scenario.difficulty].color}`}>
-                    {DIFFICULTY_LABELS[scenario.difficulty].label}
-                  </span>
-                </div>
-                <p className="text-muted text-sm mt-0.5">{scenario.shortDescription}</p>
+                <p className="text-xs uppercase tracking-wide text-gold-dark font-semibold">
+                  {history.length === 0 ? "С чего начать" : "Следующий шаг"}
+                </p>
+                <p className="font-semibold mt-0.5">{recommended.title}</p>
+                <p className="text-muted text-sm mt-0.5">{recommended.shortDescription}</p>
               </div>
               <span className="text-2xl text-muted">→</span>
             </Link>
-          ))}
-        </div>
-      </div>
+          )}
 
-      <div>
-        <p className="font-semibold mb-3">Достижения</p>
-        <div className="grid grid-cols-2 gap-3">
-          {ACHIEVEMENTS.map((a) => {
-            const isUnlocked = unlocked.has(a.key);
-            return (
-              <div
-                key={a.key}
-                className={`rounded-2xl border p-4 flex flex-col items-center text-center gap-1 transition-all ${
-                  isUnlocked
-                    ? "card-elevated"
-                    : "bg-card/40 border-card-border opacity-40 grayscale"
-                }`}
-              >
-                <span className="text-2xl">{isUnlocked ? a.emoji : "🔒"}</span>
-                <p className="font-medium text-sm">{a.title}</p>
-                <p className="text-muted text-xs">{a.description}</p>
+          <Link
+            href="/theory"
+            className="card-elevated card-elevated-interactive rounded-2xl p-4 flex items-center gap-3"
+          >
+            <span className="text-2xl">🎓</span>
+            <span className="font-medium text-sm">Теория переговоров</span>
+          </Link>
+
+          <div>
+            <p className="font-semibold mb-3">Сценарии</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {SCENARIOS.map((scenario, i) => (
+                <Link
+                  key={scenario.slug}
+                  href={`/scenarios/${scenario.slug}`}
+                  className="card-elevated card-elevated-interactive animate-fade-in-up rounded-2xl p-5 flex items-center gap-4"
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <OpponentAvatar avatarKey={scenario.opponentAvatarKey} size={56} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">{scenario.title}</p>
+                      <span className={`text-xs font-medium shrink-0 ${DIFFICULTY_LABELS[scenario.difficulty].color}`}>
+                        {DIFFICULTY_LABELS[scenario.difficulty].label}
+                      </span>
+                    </div>
+                    <p className="text-muted text-sm mt-0.5">{scenario.shortDescription}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6 lg:sticky lg:top-8">
+          {history && history.length > 0 && (
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-3 animate-fade-in-up">
+              <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-4 text-center lg:flex lg:items-center lg:justify-between lg:text-left shadow-lg shadow-accent/20">
+                <p className="font-display text-2xl font-extrabold tabular-nums">{sessionsCompleted}</p>
+                <p className="text-xs text-white/80 mt-0.5 lg:mt-0">тренировок</p>
               </div>
-            );
-          })}
+              <div className="card-elevated rounded-2xl p-4 text-center lg:flex lg:items-center lg:justify-between lg:text-left">
+                <p className="font-display text-2xl font-extrabold tabular-nums">{avgScore}</p>
+                <p className="text-muted text-xs mt-0.5 lg:mt-0">средний балл</p>
+              </div>
+              <div className="card-elevated rounded-2xl p-4 text-center lg:flex lg:items-center lg:justify-between lg:text-left">
+                <p className="font-display text-2xl font-extrabold tabular-nums">
+                  {wins}
+                  <span className="text-base">🏆</span>
+                </p>
+                <p className="text-muted text-xs mt-0.5 lg:mt-0">побед</p>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="font-semibold mb-3">Достижения</p>
+            <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+              {ACHIEVEMENTS.map((a) => {
+                const isUnlocked = unlocked.has(a.key);
+                return (
+                  <div
+                    key={a.key}
+                    className={`rounded-2xl border p-4 flex flex-col lg:flex-row items-center text-center lg:text-left gap-1 lg:gap-3 transition-all ${
+                      isUnlocked ? "card-elevated" : "bg-card/40 border-card-border opacity-40 grayscale"
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0">{isUnlocked ? a.emoji : "🔒"}</span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm">{a.title}</p>
+                      <p className="text-muted text-xs">{a.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </main>

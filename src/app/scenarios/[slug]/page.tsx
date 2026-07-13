@@ -46,72 +46,78 @@ function ScenarioBriefingContent() {
   }
 
   return (
-    <main className="flex-1 flex flex-col px-4 py-8 gap-6 max-w-2xl mx-auto w-full">
+    <main className="flex-1 px-4 py-8 max-w-5xl mx-auto w-full">
       <Link href="/dashboard" className="text-muted text-sm w-fit">
         ← Назад к сценариям
       </Link>
 
-      <div className="flex items-center gap-4 animate-fade-in-up">
+      <div className="flex items-center gap-4 animate-fade-in-up mt-4 mb-6">
         <OpponentAvatar avatarKey={scenario.opponentAvatarKey} size={88} />
         <div>
-          <h1 className="font-display text-2xl font-extrabold">{scenario.title}</h1>
+          <h1 className="font-display text-2xl lg:text-3xl font-extrabold">{scenario.title}</h1>
           <p className="text-muted text-sm mt-0.5">
             Оппонент: {scenario.opponentName} ({scenario.opponentRole})
           </p>
         </div>
       </div>
 
-      {scenario.contentWarning && (
-        <div className="rounded-2xl bg-danger/10 border border-danger/30 p-5">
-          <p className="font-semibold mb-1 text-danger">⚠️ Предупреждение</p>
-          <p className="text-sm leading-relaxed">{scenario.contentWarning}</p>
-        </div>
-      )}
+      <div className="grid lg:grid-cols-[1fr_18rem] gap-6 items-start">
+        <div className="flex flex-col gap-6 min-w-0">
+          {scenario.contentWarning && (
+            <div className="rounded-2xl bg-danger/10 border border-danger/30 p-5">
+              <p className="font-semibold mb-1 text-danger">⚠️ Предупреждение</p>
+              <p className="text-sm leading-relaxed">{scenario.contentWarning}</p>
+            </div>
+          )}
 
-      <div className="card-elevated rounded-2xl p-5">
-        <p className="font-semibold mb-2">Твоя роль и ситуация</p>
-        <p className="text-sm leading-relaxed whitespace-pre-line">{scenario.briefingText}</p>
-      </div>
+          <div className="card-elevated rounded-2xl p-5">
+            <p className="font-semibold mb-2">Твоя роль и ситуация</p>
+            <p className="text-sm leading-relaxed whitespace-pre-line">{scenario.briefingText}</p>
+          </div>
 
-      <div className="rounded-2xl bg-accent-soft border border-accent/20 p-5">
-        <p className="font-semibold mb-2 text-accent-dark">Что оценивается</p>
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {scenario.evaluationCriteria.map((c) => (
-            <li key={c.key} className="flex justify-between gap-3">
-              <span>{c.label}</span>
-              <span className="text-muted tabular-nums">{c.weight}%</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {relevantTheory.length > 0 && (
-        <div className="card-elevated rounded-2xl p-5">
-          <p className="font-semibold mb-3">Пригодится перед стартом</p>
-          <div className="flex flex-col gap-2">
-            {relevantTheory.map((t) => (
-              <Link
-                key={t.slug}
-                href={`/theory/${t.slug}`}
-                className="flex items-center gap-2 text-sm hover:text-accent transition-colors"
-              >
-                <span>{t.emoji}</span>
-                <span className="underline">{t.title}</span>
-              </Link>
-            ))}
+          <div className="rounded-2xl bg-accent-soft border border-accent/20 p-5">
+            <p className="font-semibold mb-2 text-accent-dark">Что оценивается</p>
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {scenario.evaluationCriteria.map((c) => (
+                <li key={c.key} className="flex justify-between gap-3">
+                  <span>{c.label}</span>
+                  <span className="text-muted tabular-nums">{c.weight}%</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-      )}
 
-      <button
-        onClick={handleStart}
-        disabled={starting}
-        className="rounded-xl bg-accent hover:bg-accent-dark transition-colors text-white py-3.5 font-semibold text-lg disabled:opacity-50 shadow-lg shadow-accent/20"
-      >
-        {starting ? "Готовим сессию…" : "Начать переговоры"}
-      </button>
+        <div className="flex flex-col gap-6 lg:sticky lg:top-8">
+          {relevantTheory.length > 0 && (
+            <div className="card-elevated rounded-2xl p-5">
+              <p className="font-semibold mb-3">Пригодится перед стартом</p>
+              <div className="flex flex-col gap-2">
+                {relevantTheory.map((t) => (
+                  <Link
+                    key={t.slug}
+                    href={`/theory/${t.slug}`}
+                    className="flex items-center gap-2 text-sm hover:text-accent transition-colors"
+                  >
+                    <span>{t.emoji}</span>
+                    <span className="underline">{t.title}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {error && <p className="text-danger text-sm text-center">{error}</p>}
+          <button
+            onClick={handleStart}
+            disabled={starting}
+            className="rounded-xl bg-accent hover:bg-accent-dark transition-colors text-white py-3.5 font-semibold text-lg disabled:opacity-50 shadow-lg shadow-accent/20"
+          >
+            {starting ? "Готовим сессию…" : "Начать переговоры"}
+          </button>
+
+          {error && <p className="text-danger text-sm text-center">{error}</p>}
+        </div>
+      </div>
     </main>
   );
 }

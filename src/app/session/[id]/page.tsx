@@ -416,7 +416,17 @@ function SessionContent() {
     <main className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur px-4 pt-4 pb-3 flex flex-col items-center border-b border-card-border">
         <div className="flex w-full items-start justify-between">
-          <div className="w-10" />
+          <button
+            onClick={() => {
+              interrupt();
+              router.push("/dashboard");
+            }}
+            className="w-10 h-10 rounded-full bg-card border border-card-border text-lg flex items-center justify-center"
+            title="Выйти к сценариям"
+            aria-label="Выйти к сценариям"
+          >
+            ←
+          </button>
           <OpponentAvatar avatarKey={scenario.opponentAvatarKey} state={opponentStateFor(flow)} size={110} />
           <button
             onClick={() => setVoiceOn((v) => !v)}
