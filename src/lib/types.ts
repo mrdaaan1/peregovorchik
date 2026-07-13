@@ -36,6 +36,12 @@ export type CriterionScore = {
 
 export type Outcome = "win" | "draw" | "lose";
 
+export type KeyMoment = {
+  quote: string; // дословная цитата реплики игрока из диалога
+  verdict: "good" | "bad";
+  comment: string; // почему это сработало/не сработало, со ссылкой на технику
+};
+
 export type SessionResult = {
   id: string;
   session_id: string;
@@ -43,5 +49,6 @@ export type SessionResult = {
   score: number;
   criteria_breakdown: CriterionScore[];
   feedback_text: string;
+  key_moments?: KeyMoment[];
   created_at: string;
 };

@@ -64,10 +64,10 @@ export default function LoginPage() {
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm flex flex-col gap-6">
+      <div className="w-full max-w-sm flex flex-col gap-6 animate-fade-in-up">
         <div className="text-center">
           <p className="text-3xl mb-2">🤝</p>
-          <h1 className="text-2xl font-bold">Арена переговоров</h1>
+          <h1 className="font-display text-2xl font-extrabold">Арена переговоров</h1>
           <p className="text-muted text-sm mt-1">Симулятор навыков деловых переговоров</p>
         </div>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent"
+            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent transition-colors"
           />
           <input
             type="password"
@@ -87,12 +87,12 @@ export default function LoginPage() {
             placeholder="Пароль"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent"
+            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent transition-colors"
           />
           <button
             type="submit"
             disabled={submitting || !email.trim() || !password}
-            className="rounded-xl bg-accent text-white py-3 font-semibold disabled:opacity-50"
+            className="rounded-xl bg-accent hover:bg-accent-dark transition-colors text-white py-3 font-semibold disabled:opacity-50 shadow-lg shadow-accent/20"
           >
             {submitting
               ? "Секунду…"
@@ -100,7 +100,7 @@ export default function LoginPage() {
                 ? "Войти"
                 : "Зарегистрироваться"}
           </button>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {error && <p className="text-danger text-sm text-center">{error}</p>}
           {notice && <p className="text-muted text-sm text-center">{notice}</p>}
         </form>
 

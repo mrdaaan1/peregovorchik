@@ -71,17 +71,27 @@ export async function POST(request: Request) {
       messages as { role: "user" | "opponent"; content: string }[],
     );
 
-    const { data: savedResult, error: saveError } = await supabase
+    const baseRow = {
+      session_id: session.id,
+      outcome: evaluation.outcome,
+      score: evaluation.score,
+      criteria_breakdown: evaluation.criteria_breakdown,
+      feedback_text: evaluation.feedback_text,
+    };
+
+    let { data: savedResult, error: saveError } = await supabase
       .from("session_results")
-      .insert({
-        session_id: session.id,
-        outcome: evaluation.outcome,
-        score: evaluation.score,
-        criteria_breakdown: evaluation.criteria_breakdown,
-        feedback_text: evaluation.feedback_text,
-      })
+      .insert({ ...baseRow, key_moments: evaluation.key_moments })
       .select("*")
       .single();
+
+    if (saveError) {
+      // Колонка key_moments может ещё не существовать, если миграция 0002
+      // не применена — не теряем весь результат оценки из-за одного поля.
+      const fallback = await supabase.from("session_results").insert(baseRow).select("*").single();
+      savedResult = fallback.data;
+      saveError = fallback.error;
+    }
 
     if (saveError || !savedResult) {
       return NextResponse.json({ error: "result_save_failed" }, { status: 500 });

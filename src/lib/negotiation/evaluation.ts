@@ -1,5 +1,5 @@
 import type { Scenario } from "@/lib/scenarios/types";
-import type { CriterionScore, Outcome } from "@/lib/types";
+import type { CriterionScore, KeyMoment, Outcome } from "@/lib/types";
 import { callOpenRouter, EVALUATION_MODEL, type ChatMessage } from "@/lib/openrouter";
 
 export type EvaluationResult = {
@@ -7,6 +7,7 @@ export type EvaluationResult = {
   score: number;
   criteria_breakdown: CriterionScore[];
   feedback_text: string;
+  key_moments: KeyMoment[];
 };
 
 type RawEvaluation = {
@@ -14,6 +15,7 @@ type RawEvaluation = {
   overall_score: number;
   criteria: { key: string; score: number; comment: string }[];
   feedback: string;
+  key_moments?: { quote: string; verdict: string; comment: string }[];
 };
 
 function buildEvaluationSystemPrompt(scenario: Scenario): string {
@@ -31,12 +33,15 @@ function buildEvaluationSystemPrompt(scenario: Scenario): string {
 Оцени игрока по следующим критериям (используй Гарвардский метод переговоров, принципы SPIN и понятие BATNA как рамку анализа):
 ${criteriaList}
 
+Дополнительно выбери 2-4 конкретных ключевых момента диалога — дословные цитаты реплик ИГРОКА (не оппонента), которые сильнее всего повлияли на исход: и удачные, и неудачные. Для каждой цитаты объясни, какую переговорную технику она иллюстрирует (Гарвардский метод/SPIN/работа с BATNA/деэскалация) и почему это сработало или не сработало.
+
 Верни ответ СТРОГО в формате JSON, без markdown и пояснений вне JSON:
 {
   "outcome": "win" | "draw" | "lose",
   "overall_score": число от 0 до 100,
   "criteria": [{ "key": "ключ_критерия", "score": число от 0 до 100, "comment": "краткий комментарий на русском, 1-2 предложения" }, ...],
-  "feedback": "развёрнутый разбор на русском, 4-6 предложений: что игрок сделал хорошо, что можно улучшить, конкретный совет на будущее"
+  "feedback": "развёрнутый разбор на русском, 4-6 предложений: что игрок сделал хорошо, что можно улучшить, конкретный совет на будущее",
+  "key_moments": [{ "quote": "дословная цитата реплики игрока", "verdict": "good" | "bad", "comment": "почему это сработало/не сработало, с привязкой к технике" }, ...]
 }
 
 outcome определяй так: "win" — игрок добился условий, близких к своей цели, не жертвуя интересами; "draw" — компромисс хуже цели, но не провальный; "lose" — итог явно хуже цели игрока или переговоры сорвались.`;
@@ -80,10 +85,19 @@ export async function evaluateNegotiation(
     };
   });
 
+  const key_moments: KeyMoment[] = (parsed.key_moments ?? [])
+    .filter((m) => m.quote && m.comment)
+    .map((m) => ({
+      quote: m.quote,
+      verdict: m.verdict === "bad" ? "bad" : "good",
+      comment: m.comment,
+    }));
+
   return {
     outcome,
     score,
     criteria_breakdown,
     feedback_text: parsed.feedback ?? "",
+    key_moments,
   };
 }

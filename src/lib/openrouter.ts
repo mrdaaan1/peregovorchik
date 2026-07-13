@@ -11,6 +11,11 @@ export const NEGOTIATION_MODEL =
 export const EVALUATION_MODEL =
   process.env.OPENROUTER_EVALUATION_MODEL ?? "nvidia/nemotron-3-super-120b-a12b:free";
 
+const CALL_MAX_ATTEMPTS = 3;
+
+// OpenRouter (особенно бесплатные модели) время от времени рвёт соединение
+// на середине ответа (SocketError "other side closed") — без retry это
+// валило всю оценку сессии и озвучку одним сетевым сбоем.
 export async function callOpenRouter(
   model: string,
   messages: ChatMessage[],
@@ -19,30 +24,38 @@ export async function callOpenRouter(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://peregovorchik.vercel.app",
-      "X-Title": "Peregovorchik",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      ...(options?.jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CALL_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://peregovorchik.vercel.app",
+          "X-Title": "Peregovorchik",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          ...(options?.jsonMode ? { response_format: { type: "json_object" } } : {}),
+        }),
+      });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 500)}`);
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 500)}`);
+      }
+
+      const data = await res.json();
+      const text: string | undefined = data.choices?.[0]?.message?.content;
+      if (!text) throw new Error("OpenRouter returned empty response");
+      return text.trim();
+    } catch (e) {
+      lastError = e;
+    }
   }
-
-  const data = await res.json();
-  const text: string | undefined = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("OpenRouter returned empty response");
-  return text.trim();
+  throw lastError;
 }
 
 /**

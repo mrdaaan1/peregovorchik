@@ -7,6 +7,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { OpponentAvatar } from "@/components/OpponentAvatar";
 import { useAuth } from "@/lib/auth-context";
 import { getScenarioBySlug } from "@/lib/scenarios";
+import { recommendBooks } from "@/lib/books";
 import type { SessionResult } from "@/lib/types";
 
 const OUTCOME_LABELS: Record<SessionResult["outcome"], { label: string; emoji: string; color: string }> = {
@@ -83,59 +84,105 @@ function ResultContent() {
   }
 
   const outcomeInfo = OUTCOME_LABELS[result.outcome];
+  const weakCriteria = result.criteria_breakdown.filter((c) => c.score < 70).map((c) => c.criterion);
+  const books = recommendBooks(weakCriteria);
 
   return (
     <main className="flex-1 flex flex-col px-4 py-8 gap-6 max-w-2xl mx-auto w-full">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 animate-fade-in-up">
         <OpponentAvatar avatarKey={scenario.opponentAvatarKey} size={72} />
         <div>
           <p className="text-muted text-sm">{scenario.title}</p>
-          <h1 className="text-2xl font-bold">Итоги переговоров</h1>
+          <h1 className="font-display text-2xl font-extrabold">Итоги переговоров</h1>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-6 flex items-center justify-between">
+      <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-6 flex items-center justify-between shadow-xl shadow-accent/25 animate-scale-in">
         <div>
           <p className="text-white/80 text-xs uppercase tracking-wide">Результат</p>
-          <p className={`text-2xl font-extrabold`}>
+          <p className="font-display text-2xl font-extrabold mt-0.5">
             {outcomeInfo.emoji} {outcomeInfo.label}
           </p>
         </div>
         <div className="text-right">
           <p className="text-white/80 text-xs uppercase tracking-wide">Общий балл</p>
-          <p className="text-4xl font-extrabold">{result.score}</p>
+          <p className="font-display text-4xl font-extrabold tabular-nums">{result.score}</p>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-card border border-card-border p-5 flex flex-col gap-4">
+      <div className="card-elevated rounded-2xl p-5 flex flex-col gap-4">
         <p className="font-semibold">Разбор по критериям</p>
         {result.criteria_breakdown.map((c) => (
           <div key={c.criterion}>
             <div className="flex justify-between text-sm mb-1">
               <span className="font-medium">{c.label}</span>
-              <span className="text-muted">{c.score}/100</span>
+              <span className="text-muted tabular-nums">{c.score}/100</span>
             </div>
             <div className="h-2 rounded-full bg-background overflow-hidden mb-1.5">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${c.score}%` }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-accent to-accent-dark transition-all duration-700"
+                style={{ width: `${c.score}%` }}
+              />
             </div>
             <p className="text-muted text-sm">{c.comment}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-2xl bg-accent/10 border border-accent/30 p-5">
-        <p className="font-semibold mb-2 text-accent">Развёрнутый разбор</p>
+      <div className="rounded-2xl bg-accent-soft border border-accent/20 p-5">
+        <p className="font-semibold mb-2 text-accent-dark">Развёрнутый разбор</p>
         <p className="text-sm leading-relaxed whitespace-pre-line">{result.feedback_text}</p>
+      </div>
+
+      {result.key_moments && result.key_moments.length > 0 && (
+        <div className="card-elevated rounded-2xl p-5 flex flex-col gap-3">
+          <p className="font-semibold">Ключевые моменты диалога</p>
+          {result.key_moments.map((m, i) => (
+            <div
+              key={i}
+              className={`rounded-r-lg border-l-4 pl-4 py-2 ${
+                m.verdict === "good" ? "border-emerald-500 bg-emerald-500/5" : "border-danger bg-danger/5"
+              }`}
+            >
+              <p className="text-sm italic">«{m.quote}»</p>
+              <p className="text-muted text-sm mt-1">
+                {m.verdict === "good" ? "✅ " : "⚠️ "}
+                {m.comment}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card-elevated rounded-2xl p-5">
+        <p className="font-semibold mb-1">📚 Что почитать дальше</p>
+        <p className="text-muted text-sm mb-3">Подобрано под то, что стоит прокачать в этом сценарии</p>
+        <div className="flex flex-col gap-3">
+          {books.map((b) => (
+            <div key={b.title} className="flex gap-3">
+              <span className="text-2xl">{b.emoji}</span>
+              <div>
+                <p className="font-medium text-sm">
+                  {b.title} <span className="text-muted font-normal">— {b.author}</span>
+                </p>
+                <p className="text-muted text-sm mt-0.5">{b.pitch}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-3">
         <Link
           href={`/scenarios/${scenario.slug}`}
-          className="flex-1 rounded-xl border border-card-border bg-card py-3 font-medium text-center"
+          className="card-elevated card-elevated-interactive flex-1 rounded-xl py-3 font-medium text-center"
         >
           Попробовать снова
         </Link>
-        <Link href="/dashboard" className="flex-1 rounded-xl bg-accent text-white py-3 font-semibold text-center">
+        <Link
+          href="/dashboard"
+          className="flex-1 rounded-xl bg-accent hover:bg-accent-dark transition-colors text-white py-3 font-semibold text-center"
+        >
           К сценариям
         </Link>
       </div>

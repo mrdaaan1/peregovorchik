@@ -1,13 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8fa;
-  --foreground: #16181d;
+  --background: #f6f7f6;
+  --foreground: #14181a;
   --card: #ffffff;
-  --card-border: rgba(11, 11, 11, 0.08);
-  --muted: #6b7280;
+  --card-border: rgba(15, 30, 28, 0.09);
+  --muted: #647070;
   --accent: #2a6f6f;
   --accent-dark: #1f5555;
+  --accent-soft: #e6f2f1;
+  --gold: #b8862f;
+  --gold-dark: #8a6521;
+  --danger: #ab2a33;
+  --shadow-color: 180 25% 12%;
 }
 
 @theme inline {
@@ -18,24 +23,131 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-gold-dark: var(--gold-dark);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f1115;
-    --foreground: #f0f1f3;
-    --card: #191c22;
-    --card-border: rgba(255, 255, 255, 0.1);
-    --muted: #9aa1ac;
-    --accent: #3fa5a0;
+    --background: #0e1213;
+    --foreground: #eef2f1;
+    --card: #171d1e;
+    --card-border: rgba(255, 255, 255, 0.09);
+    --muted: #93a3a2;
+    --accent: #45b0a9;
     --accent-dark: #2d7c78;
+    --accent-soft: #14302c;
+    --gold: #dcb35c;
+    --gold-dark: #b3902f;
+    --danger: #e2626b;
+    --shadow-color: 180 40% 2%;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0e1213;
+  --foreground: #eef2f1;
+  --card: #171d1e;
+  --card-border: rgba(255, 255, 255, 0.09);
+  --muted: #93a3a2;
+  --accent: #45b0a9;
+  --accent-dark: #2d7c78;
+  --accent-soft: #14302c;
+  --gold: #dcb35c;
+  --gold-dark: #b3902f;
+  --danger: #e2626b;
+  --shadow-color: 180 40% 2%;
+}
+
+:root[data-theme="light"] {
+  --background: #f6f7f6;
+  --foreground: #14181a;
+  --card: #ffffff;
+  --card-border: rgba(15, 30, 28, 0.09);
+  --muted: #647070;
+  --accent: #2a6f6f;
+  --accent-dark: #1f5555;
+  --accent-soft: #e6f2f1;
+  --gold: #b8862f;
+  --gold-dark: #8a6521;
+  --danger: #ab2a33;
+  --shadow-color: 180 25% 12%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Карточки получают приподнятую, тонированную под акцент тень вместо
+   плоского бордера — глубина без визуального шума на светлом и тёмном фоне. */
+.card-elevated {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  box-shadow:
+    0 1px 2px hsl(var(--shadow-color) / 0.06),
+    0 8px 24px -12px hsl(var(--shadow-color) / 0.18);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.card-elevated-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow:
+    0 2px 4px hsl(var(--shadow-color) / 0.08),
+    0 16px 32px -14px hsl(var(--shadow-color) / 0.28);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-scale-in {
+    animation: none;
+  }
+  .card-elevated-interactive:hover {
+    transform: none;
+  }
 }

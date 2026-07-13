@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AuthGate } from "@/components/AuthGate";
 import { OpponentAvatar } from "@/components/OpponentAvatar";
 import { getScenarioBySlug } from "@/lib/scenarios";
+import { getTheoryModulesForScenario } from "@/lib/theory";
 
 function ScenarioBriefingContent() {
   const params = useParams<{ slug: string }>();
@@ -14,6 +15,7 @@ function ScenarioBriefingContent() {
   const [error, setError] = useState<string | null>(null);
 
   const scenario = getScenarioBySlug(params.slug);
+  const relevantTheory = scenario ? getTheoryModulesForScenario(scenario.slug) : [];
 
   if (!scenario) {
     return (
@@ -49,10 +51,10 @@ function ScenarioBriefingContent() {
         ← Назад к сценариям
       </Link>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 animate-fade-in-up">
         <OpponentAvatar avatarKey={scenario.opponentAvatarKey} size={88} />
         <div>
-          <h1 className="text-2xl font-bold">{scenario.title}</h1>
+          <h1 className="font-display text-2xl font-extrabold">{scenario.title}</h1>
           <p className="text-muted text-sm mt-0.5">
             Оппонент: {scenario.opponentName} ({scenario.opponentRole})
           </p>
@@ -60,38 +62,56 @@ function ScenarioBriefingContent() {
       </div>
 
       {scenario.contentWarning && (
-        <div className="rounded-2xl bg-red-500/10 border border-red-500/30 p-5">
-          <p className="font-semibold mb-1 text-red-600">⚠️ Предупреждение</p>
+        <div className="rounded-2xl bg-danger/10 border border-danger/30 p-5">
+          <p className="font-semibold mb-1 text-danger">⚠️ Предупреждение</p>
           <p className="text-sm leading-relaxed">{scenario.contentWarning}</p>
         </div>
       )}
 
-      <div className="rounded-2xl bg-card border border-card-border p-5">
+      <div className="card-elevated rounded-2xl p-5">
         <p className="font-semibold mb-2">Твоя роль и ситуация</p>
         <p className="text-sm leading-relaxed whitespace-pre-line">{scenario.briefingText}</p>
       </div>
 
-      <div className="rounded-2xl bg-accent/10 border border-accent/30 p-5">
-        <p className="font-semibold mb-2 text-accent">Что оценивается</p>
+      <div className="rounded-2xl bg-accent-soft border border-accent/20 p-5">
+        <p className="font-semibold mb-2 text-accent-dark">Что оценивается</p>
         <ul className="flex flex-col gap-1.5 text-sm">
           {scenario.evaluationCriteria.map((c) => (
             <li key={c.key} className="flex justify-between gap-3">
               <span>{c.label}</span>
-              <span className="text-muted">{c.weight}%</span>
+              <span className="text-muted tabular-nums">{c.weight}%</span>
             </li>
           ))}
         </ul>
       </div>
 
+      {relevantTheory.length > 0 && (
+        <div className="card-elevated rounded-2xl p-5">
+          <p className="font-semibold mb-3">Пригодится перед стартом</p>
+          <div className="flex flex-col gap-2">
+            {relevantTheory.map((t) => (
+              <Link
+                key={t.slug}
+                href={`/theory/${t.slug}`}
+                className="flex items-center gap-2 text-sm hover:text-accent transition-colors"
+              >
+                <span>{t.emoji}</span>
+                <span className="underline">{t.title}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleStart}
         disabled={starting}
-        className="rounded-xl bg-accent text-white py-3.5 font-semibold text-lg disabled:opacity-50"
+        className="rounded-xl bg-accent hover:bg-accent-dark transition-colors text-white py-3.5 font-semibold text-lg disabled:opacity-50 shadow-lg shadow-accent/20"
       >
         {starting ? "Готовим сессию…" : "Начать переговоры"}
       </button>
 
-      {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+      {error && <p className="text-danger text-sm text-center">{error}</p>}
     </main>
   );
 }
