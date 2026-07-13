@@ -311,7 +311,15 @@ function SessionContent() {
           for (const part of parts) {
             const line = part.trim();
             if (!line.startsWith("data:")) continue;
-            const payload = JSON.parse(line.slice(5).trim());
+
+            let payload: { type: string; text?: string; audio?: string; reply?: string };
+            try {
+              payload = JSON.parse(line.slice(5).trim());
+            } catch {
+              // Повреждённый/неполный SSE-чанк (например, обрезанный на
+              // границе TCP-пакета) — пропускаем, не валим весь ответ.
+              continue;
+            }
 
             if (payload.type === "delta") {
               if (firstDelta) {
@@ -321,7 +329,7 @@ function SessionContent() {
               full += payload.text;
               typewriter.setTarget(full);
             } else if (payload.type === "audio") {
-              if (generation !== audioQueue.currentGeneration()) continue;
+              if (!payload.audio || generation !== audioQueue.currentGeneration()) continue;
               const bytes = Uint8Array.from(atob(payload.audio), (c) => c.charCodeAt(0));
               audioQueue.enqueue(new Blob([bytes], { type: "audio/mpeg" }));
             } else if (payload.type === "restart") {
