@@ -9,7 +9,7 @@ export const maxDuration = 60;
 const MAX_HISTORY_MESSAGES = 30;
 // Разбиваем ответ на предложения, чтобы озвучивать их по мере готовности,
 // не дожидаясь полного текста целиком.
-const SENTENCE_BOUNDARY = /(?<=[.!?…])\s+/;
+const SENTENCE_BOUNDARY = /(?<=[.!?…])\s+/g;
 
 function jsonLine(obj: unknown): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`);
@@ -81,11 +81,35 @@ export async function POST(request: Request) {
     })),
   ];
 
+  // Клиент может отменить чтение стрима (закрыл вкладку, прервал ответ) до
+  // того как генерация LLM/TTS завершится — тогда controller уже закрыт, и
+  // дальнейшие enqueue/close должны быть no-op вместо падения с ERR_INVALID_STATE.
+  const state = { closed: false };
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let full = "";
       let unspokenStart = 0;
       let audioIndex = 0;
+
+      function safeEnqueue(chunk: Uint8Array) {
+        if (state.closed) return;
+        try {
+          controller.enqueue(chunk);
+        } catch {
+          state.closed = true;
+        }
+      }
+
+      function safeClose() {
+        if (state.closed) return;
+        state.closed = true;
+        try {
+          controller.close();
+        } catch {
+          // уже закрыт клиентом — игнорируем
+        }
+      }
 
       async function speakReady(upTo: number, force: boolean) {
         // Ищем последнюю границу предложения в ещё неозвученном хвосте.
@@ -100,7 +124,7 @@ export async function POST(request: Request) {
 
         try {
           const audio = await synthesizeSpeech(sentence, voice ?? "male");
-          controller.enqueue(
+          safeEnqueue(
             jsonLine({ type: "audio", index: audioIndex++, audio: Buffer.from(audio).toString("base64") }),
           );
         } catch (e) {
@@ -108,23 +132,47 @@ export async function POST(request: Request) {
         }
       }
 
-      try {
+      // OpenRouter иногда обрывает SSE-соединение среди ответа (нестабильность
+      // бесплатной модели/сети) — один retry с нуля, если не успели получить
+      // ни одного токена, иначе отдаём клиенту то, что уже накопили, вместо
+      // полного провала на середине фразы.
+      async function runOnce() {
         for await (const delta of streamOpenRouter(NEGOTIATION_MODEL, chatMessages)) {
+          if (state.closed) break;
           full += delta;
-          controller.enqueue(jsonLine({ type: "delta", text: delta }));
+          safeEnqueue(jsonLine({ type: "delta", text: delta }));
           await speakReady(full.length, false);
         }
+      }
+
+      try {
+        try {
+          await runOnce();
+        } catch (e) {
+          if (full) throw e;
+          console.warn("negotiation stream dropped with no output, retrying once", e);
+          await runOnce();
+        }
+
         await speakReady(full.length, true);
 
-        await supabase.from("messages").insert({ session_id: session.id, role: "opponent", content: full.trim() });
+        const reply = full.trim();
+        if (reply) {
+          await supabase.from("messages").insert({ session_id: session.id, role: "opponent", content: reply });
+        }
 
-        controller.enqueue(jsonLine({ type: "done", reply: full.trim() }));
+        safeEnqueue(jsonLine({ type: "done", reply }));
       } catch (e) {
         console.error("negotiation chat failed", e);
-        controller.enqueue(jsonLine({ type: "error" }));
+        safeEnqueue(jsonLine({ type: "error" }));
       } finally {
-        controller.close();
+        safeClose();
       }
+    },
+    cancel() {
+      // Клиент прервал чтение (barge-in/abort) — помечаем как закрыто,
+      // чтобы текущий тик speakReady/streamOpenRouter не пытался enqueue.
+      state.closed = true;
     },
   });
 
