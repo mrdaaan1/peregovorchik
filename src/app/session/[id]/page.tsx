@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { OpponentAvatar, type OpponentState } from "@/components/OpponentAvatar";
 import { useAuth } from "@/lib/auth-context";
@@ -19,23 +19,98 @@ function opponentStateFor(flow: FlowState): OpponentState {
   return "idle";
 }
 
+// Аудио-плеер с очередью чанков и поддержкой мгновенного прерывания
+// (barge-in) — когда пользователь начинает говорить или отправляет новое
+// сообщение, текущее и все ещё не сыгранные аудио должны тут же оборваться.
+function useAudioQueue() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const playingRef = useRef(false);
+  const generationRef = useRef(0);
+  const onIdleRef = useRef<(() => void) | null>(null);
+
+  function ensureAudio() {
+    if (!audioRef.current) audioRef.current = new Audio();
+    return audioRef.current;
+  }
+
+  const playNext = useCallback((generation: number) => {
+    if (generation !== generationRef.current) return;
+    const url = queueRef.current.shift();
+    if (!url) {
+      playingRef.current = false;
+      onIdleRef.current?.();
+      return;
+    }
+    playingRef.current = true;
+    const audio = ensureAudio();
+    audio.src = url;
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      playNext(generation);
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      playNext(generation);
+    };
+    audio.play().catch(() => playNext(generation));
+  }, []);
+
+  const enqueue = useCallback(
+    (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      queueRef.current.push(url);
+      if (!playingRef.current) playNext(generationRef.current);
+    },
+    [playNext],
+  );
+
+  // Обрывает текущее воспроизведение и очищает очередь; всё, что придёт
+  // после этого от уже отменённого ответа, будет проигнорировано по generation.
+  const stopAll = useCallback((onIdle?: () => void) => {
+    generationRef.current += 1;
+    onIdleRef.current = onIdle ?? null;
+    queueRef.current.splice(0).forEach((url) => URL.revokeObjectURL(url));
+    playingRef.current = false;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute("src");
+    }
+  }, []);
+
+  const currentGeneration = useCallback(() => generationRef.current, []);
+
+  useEffect(() => stopAll, [stopAll]);
+
+  return { enqueue, stopAll, currentGeneration };
+}
+
 function SessionContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isFresh = searchParams.get("fresh") === "1";
   const { supabase } = useAuth();
 
   const [scenarioSlug, setScenarioSlug] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [flow, setFlow] = useState<FlowState>("idle");
   const [textInput, setTextInput] = useState("");
   const [voiceOn, setVoiceOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef(flow);
   flowRef.current = flow;
+  const voiceOnRef = useRef(voiceOn);
+  voiceOnRef.current = voiceOn;
+  const abortRef = useRef<AbortController | null>(null);
 
+  const audioQueue = useAudioQueue();
   const { state: micState, interimText, start: startListening, stop: stopListening } = useSpeechRecognition();
 
   const scenario = scenarioSlug ? getScenarioBySlug(scenarioSlug) : null;
@@ -77,72 +152,123 @@ function SessionContent() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, flow]);
+  }, [messages, streamingText, flow]);
 
-  const speak = useCallback(async (text: string) => {
-    if (!voiceOn) return;
-    setFlow("speaking");
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: "male" }),
-      });
-      if (!res.ok) throw new Error("tts_failed");
+  const greetedRef = useRef(false);
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = audioRef.current ?? new Audio();
-      audioRef.current = audio;
+  // Прерывает текущий ответ аватара (текст и аудио) — вызывается, когда
+  // пользователь решает заговорить или отправить новое сообщение поверх
+  // ещё звучащего ответа (barge-in).
+  const interrupt = useCallback(() => {
+    abortRef.current?.abort();
+    audioQueue.stopAll();
+    if (flowRef.current === "speaking" || flowRef.current === "thinking") setFlow("idle");
+  }, [audioQueue]);
 
-      await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.src = url;
-        audio.play().catch(() => resolve());
+  const speakOne = useCallback(
+    async (text: string) => {
+      if (!voiceOnRef.current) return;
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: "male" }),
+        });
+        if (!res.ok) throw new Error("tts_failed");
+        audioQueue.enqueue(await res.blob());
+      } catch {
+        // молча пропускаем — стриминговый текст уже показан пользователю
+      }
+    },
+    [audioQueue],
+  );
+
+  // Озвучиваем заготовленную первую реплику персонажа сразу после старта
+  // новой сессии — раньше она только показывалась текстом.
+  useEffect(() => {
+    if (!isFresh || greetedRef.current || messages.length === 0) return;
+    if (messages.length === 1 && messages[0].role === "opponent") {
+      greetedRef.current = true;
+      setFlow("speaking");
+      speakOne(messages[0].content).finally(() => {
+        if (flowRef.current === "speaking") setFlow("idle");
       });
-      URL.revokeObjectURL(url);
-    } catch {
-      await new Promise<void>((resolve) => {
-        const synth = window.speechSynthesis;
-        if (!synth) return resolve();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "ru-RU";
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        synth.speak(utterance);
-      });
-    } finally {
-      if (flowRef.current === "speaking") setFlow("idle");
     }
-  }, [voiceOn]);
+  }, [isFresh, messages, speakOne]);
 
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+
+      interrupt();
       setError(null);
       setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+      setStreamingText("");
       setFlow("thinking");
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const generation = audioQueue.currentGeneration();
 
       try {
         const res = await fetch("/api/sessions/message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId: params.id, text: trimmed }),
+          signal: controller.signal,
         });
-        if (!res.ok) throw new Error("chat_failed");
-        const { reply } = (await res.json()) as { reply: string };
+        if (!res.ok || !res.body) throw new Error("chat_failed");
 
-        setMessages((prev) => [...prev, { role: "opponent", content: reply }]);
-        await speak(reply);
-        if (flowRef.current !== "speaking") setFlow("idle");
-      } catch {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let full = "";
+        let firstDelta = true;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+            const payload = JSON.parse(line.slice(5).trim());
+
+            if (payload.type === "delta") {
+              if (firstDelta) {
+                firstDelta = false;
+                setFlow("speaking");
+              }
+              full += payload.text;
+              setStreamingText(full);
+            } else if (payload.type === "audio") {
+              if (generation !== audioQueue.currentGeneration()) continue;
+              const bytes = Uint8Array.from(atob(payload.audio), (c) => c.charCodeAt(0));
+              audioQueue.enqueue(new Blob([bytes], { type: "audio/mpeg" }));
+            } else if (payload.type === "error") {
+              throw new Error("chat_failed");
+            }
+          }
+        }
+
+        if (generation === audioQueue.currentGeneration()) {
+          setMessages((prev) => [...prev, { role: "opponent", content: full.trim() }]);
+          setStreamingText(null);
+          if (flowRef.current === "speaking") setFlow("idle");
+        }
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
         setError("Не удалось получить ответ. Проверь соединение и попробуй ещё раз.");
+        setStreamingText(null);
         setFlow("idle");
       }
     },
-    [params.id, speak],
+    [params.id, interrupt, audioQueue],
   );
 
   function handleMicToggle() {
@@ -150,9 +276,10 @@ function SessionContent() {
       stopListening();
       return;
     }
+    // Пользователь начинает говорить поверх ответа аватара — прерываем его.
+    interrupt();
     setFlow("listening");
     startListening((finalText) => {
-      stopListening();
       setFlow("idle");
       sendMessage(finalText);
     });
@@ -166,6 +293,7 @@ function SessionContent() {
   }
 
   async function handleFinish() {
+    interrupt();
     setFlow("finishing");
     setError(null);
     try {
@@ -224,13 +352,26 @@ function SessionContent() {
           </div>
         ))}
 
+        {streamingText !== null && (
+          <div className="self-start max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap bg-card border border-card-border rounded-bl-md">
+            {streamingText}
+            {streamingText === "" && (
+              <span className="inline-flex gap-1 align-middle">
+                <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce [animation-delay:300ms]" />
+              </span>
+            )}
+          </div>
+        )}
+
         {micState === "listening" && interimText && (
           <div className="self-end max-w-[85%] rounded-2xl px-4 py-2.5 text-sm bg-accent/40 text-white rounded-br-md italic">
             {interimText}
           </div>
         )}
 
-        {busy && (
+        {flow === "finishing" && (
           <div className="self-start bg-card border border-card-border rounded-2xl rounded-bl-md px-4 py-3">
             <span className="inline-flex gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce" />
@@ -252,7 +393,7 @@ function SessionContent() {
         ) : (
           <button
             onClick={handleMicToggle}
-            disabled={busy}
+            disabled={flow === "finishing"}
             aria-label={micState === "listening" ? "Остановить запись" : "Начать говорить"}
             className={`w-20 h-20 rounded-full text-3xl shadow-lg transition-all disabled:opacity-40 ${
               micState === "listening"
@@ -273,7 +414,7 @@ function SessionContent() {
           />
           <button
             type="submit"
-            disabled={busy || !textInput.trim()}
+            disabled={flow === "finishing" || !textInput.trim()}
             className="rounded-xl bg-accent text-white px-4 font-semibold disabled:opacity-40"
           >
             ➤
@@ -295,7 +436,9 @@ function SessionContent() {
 export default function SessionPage() {
   return (
     <AuthGate>
-      <SessionContent />
+      <Suspense fallback={null}>
+        <SessionContent />
+      </Suspense>
     </AuthGate>
   );
 }

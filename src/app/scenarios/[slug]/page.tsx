@@ -40,12 +40,12 @@ function ScenarioBriefingContent() {
     }
 
     const { sessionId } = await res.json();
-    router.push(`/session/${sessionId}`);
+    router.push(`/session/${sessionId}?fresh=1`);
   }
 
   return (
     <main className="flex-1 flex flex-col px-4 py-8 gap-6 max-w-2xl mx-auto w-full">
-      <Link href="/" className="text-muted text-sm w-fit">
+      <Link href="/dashboard" className="text-muted text-sm w-fit">
         ← Назад к сценариям
       </Link>
 

@@ -75,7 +75,7 @@ function ResultContent() {
         <p className="text-muted text-center">
           Не удалось получить результат — возможно, диалог был слишком коротким.
         </p>
-        <Link href="/" className="text-accent underline">
+        <Link href="/dashboard" className="text-accent underline">
           Вернуться к сценариям
         </Link>
       </main>
@@ -135,7 +135,7 @@ function ResultContent() {
         >
           Попробовать снова
         </Link>
-        <Link href="/" className="flex-1 rounded-xl bg-accent text-white py-3 font-semibold text-center">
+        <Link href="/dashboard" className="flex-1 rounded-xl bg-accent text-white py-3 font-semibold text-center">
           К сценариям
         </Link>
       </div>

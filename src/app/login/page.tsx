@@ -1,35 +1,65 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type Mode = "signin" | "signup";
+
+function translateAuthError(message: string): string {
+  if (message.includes("Invalid login credentials")) return "Неверный email или пароль.";
+  if (message.includes("User already registered")) return "Пользователь с таким email уже зарегистрирован.";
+  if (message.includes("Password should be at least")) return "Пароль должен быть не короче 6 символов.";
+  return "Что-то пошло не так. Попробуй ещё раз.";
+}
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
 
-    setSending(true);
+    setSubmitting(true);
     setError(null);
+    setNotice(null);
     const supabase = createClient();
 
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    setSending(false);
-    if (signInError) {
-      setError("Не удалось отправить ссылку. Проверь адрес и попробуй ещё раз.");
+    if (mode === "signup") {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+      setSubmitting(false);
+      if (signUpError) {
+        setError(translateAuthError(signUpError.message));
+        return;
+      }
+      if (!data.session) {
+        setNotice("Регистрация прошла успешно. Подтверди email по ссылке из письма, затем войди.");
+        setMode("signin");
+        return;
+      }
+      router.replace("/dashboard");
       return;
     }
-    setSent(true);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setSubmitting(false);
+    if (signInError) {
+      setError(translateAuthError(signInError.message));
+      return;
+    }
+    router.replace("/dashboard");
   }
 
   return (
@@ -41,33 +71,50 @@ export default function LoginPage() {
           <p className="text-muted text-sm mt-1">Симулятор навыков деловых переговоров</p>
         </div>
 
-        {sent ? (
-          <div className="rounded-2xl bg-card border border-card-border p-5 text-center">
-            <p className="font-semibold mb-1">Проверь почту</p>
-            <p className="text-muted text-sm">
-              Мы отправили ссылку для входа на <b>{email}</b>. Перейди по ней, чтобы попасть в приложение.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent"
-            />
-            <button
-              type="submit"
-              disabled={sending || !email.trim()}
-              className="rounded-xl bg-accent text-white py-3 font-semibold disabled:opacity-50"
-            >
-              {sending ? "Отправляю…" : "Получить ссылку для входа"}
-            </button>
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            type="email"
+            required
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent"
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="Пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="rounded-xl border border-card-border bg-card px-4 py-3 text-base outline-none focus:border-accent"
+          />
+          <button
+            type="submit"
+            disabled={submitting || !email.trim() || !password}
+            className="rounded-xl bg-accent text-white py-3 font-semibold disabled:opacity-50"
+          >
+            {submitting
+              ? "Секунду…"
+              : mode === "signin"
+                ? "Войти"
+                : "Зарегистрироваться"}
+          </button>
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {notice && <p className="text-muted text-sm text-center">{notice}</p>}
+        </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMode((m) => (m === "signin" ? "signup" : "signin"));
+            setError(null);
+            setNotice(null);
+          }}
+          className="text-muted text-sm underline text-center"
+        >
+          {mode === "signin" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
+        </button>
       </div>
     </main>
   );

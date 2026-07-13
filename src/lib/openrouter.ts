@@ -44,3 +44,59 @@ export async function callOpenRouter(
   if (!text) throw new Error("OpenRouter returned empty response");
   return text.trim();
 }
+
+/**
+ * Стримит ответ модели по токенам (SSE), чтобы текст и озвучка могли
+ * начинаться до того, как весь ответ будет сгенерирован целиком.
+ */
+export async function* streamOpenRouter(
+  model: string,
+  messages: ChatMessage[],
+): AsyncGenerator<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://peregovorchik.vercel.app",
+      "X-Title": "Peregovorchik",
+    },
+    body: JSON.stringify({ model, messages, stream: true }),
+  });
+
+  if (!res.ok || !res.body) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 500)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") return;
+
+      try {
+        const parsed = JSON.parse(payload);
+        const delta: string | undefined = parsed.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        // неполный/служебный SSE-чанк — пропускаем
+      }
+    }
+  }
+}

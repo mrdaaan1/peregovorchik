@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { createClient } from "@/lib/supabase/server";
+import { synthesizeSpeech } from "@/lib/voice/tts";
 
 export const maxDuration = 30;
-
-// Бесплатные нейроголоса Microsoft Edge — без ключа и лимитов.
-const VOICES = {
-  male: "ru-RU-DmitryNeural",
-  female: "ru-RU-SvetlanaNeural",
-} as const;
-
-const MAX_TEXT_LENGTH = 1500;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -27,17 +19,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "text_required" }, { status: 400 });
   }
 
-  const tts = new MsEdgeTTS();
   try {
-    await tts.setMetadata(VOICES[voice ?? "male"], OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-    const { audioStream } = tts.toStream(text.trim().slice(0, MAX_TEXT_LENGTH));
-
-    const chunks: Buffer[] = [];
-    for await (const chunk of audioStream) {
-      chunks.push(chunk as Buffer);
-    }
-    const audio = Buffer.concat(chunks);
-
+    const audio = await synthesizeSpeech(text, voice ?? "male");
     if (audio.length === 0) {
       return NextResponse.json({ error: "empty_audio" }, { status: 502 });
     }
@@ -48,7 +31,5 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error("tts failed", e);
     return NextResponse.json({ error: "tts_failed" }, { status: 502 });
-  } finally {
-    tts.close();
   }
 }
